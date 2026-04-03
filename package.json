@@ -1,6 +1,6 @@
 {
   "name": "conesion",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "CONESION - Wireless Multimedia Presentation System | Images + Video Streaming | Socket.IO Sync | Render Ready",
   "main": "server.js",
   "scripts": {
@@ -23,7 +23,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-"dependencies": {
+  "dependencies": {
     "compression": "^1.7.4",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",

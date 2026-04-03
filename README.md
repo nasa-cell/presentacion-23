@@ -38,7 +38,10 @@ git push -u origin main
 📺 Pantalla: https://tu-app.onrender.com/pantalla
 ```
 
-**Nota:** Render storage temporal (uploads perdidos en restarts). Para persistente: Add PostgreSQL + Prisma.
+**Render Notes:**
+- Free tier: Uploads reset on cold starts (~15min inactivity)
+- Persistent storage: Add Render PostgreSQL + migrate DB to SQL
+- Auto-deploy on git push
 
 ## 🏠 Local Dev
 ```

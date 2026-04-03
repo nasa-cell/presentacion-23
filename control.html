@@ -199,7 +199,7 @@
       grid.innerHTML = media.map((file, idx) => `
         <div class="thumb ${idx === currentIndex ? 'active' : ''}" onclick="setCurrent(${idx})" title="#${idx+1} ${file.filename}">
           ${file.type === 'video' ? '<div class="video-icon">🎬</div>' : ''}
-          <img src="/media/${file.filename}?t=${Date.now()}" 
+          <img src="/media/${file.filename}?t=${file.id}" 
                onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjMzMzIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBUaHVtYjwvdGV4dD48L3N2Zz4=='" style="width:100%;height:100px;object-fit:cover;">
           <div class="num-label">${idx+1}</div>
           <button class="del-btn" onclick="deleteFile('${file.id}', event)" title="Eliminar">×</button>

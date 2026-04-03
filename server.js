@@ -161,6 +161,8 @@ app.get('/media/:filename', async (req, res) => {
       // Full file
       const stream = require('fs').createReadStream(filepath);
       res.set({
+        'Cache-Control': 'public, max-age=3600',
+
         'Content-Type': filename.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
         'Content-Length': stat.size,
         'Accept-Ranges': 'bytes',

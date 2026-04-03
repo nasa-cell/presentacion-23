@@ -1,31 +1,38 @@
-# CONESION v2.1.0 - Render Deployment Plan ✅
+# CONESION v2.2.0 - FINALIZE & RENDER DEPLOY ✅
 
-**Status: Approved by user - Ready for Render**
+**User Goal**: Update code completely, prepare for Render deployment.
 
-## Steps from Approved Plan:
+## Current Progress: 3/8 ✅
 
-### 1. Update package.json [✅ DONE]
-- Version bumped to 2.1.0
-- Added compression, helmet for prod
+### [✅] 1. Apply minor code polishes
+### [✅] 2. Update package-lock.json (`npm install` ✅)
 
-### 2. Update .gitignore [✅ DONE]
-- Added uploads/, *.log
+### [✅] 3. Local test
+   - `npm start` ✅: DB ready (2 files), server on :3000, screen client connected
+   - Manual test: localhost:3000/control → upload/nav/delete/video
+   - `npm start`
+   - Test upload/nav/delete/video
 
-### 3. Regenerate package-lock.json [✅ DONE]
-- `npm install` ran twice (deps + security)
+### [ ] 4. Git setup & commit
+   - `git add .`
+   - `git commit -m "CONESION v2.2.0 Render ready"`
 
-### 4. Update README.md [PENDING]
-- Enhance Render instructions
+### [ ] 5. Create GitHub repo
+   - github.com/new → conesion
+   - `git remote add origin [URL]`
+   - `git push -u origin main`
 
-### 5. Polish server.js [✅ DONE]
-- Added helmet CSP + compression
+### [ ] 6. Render deployment
+   - render.com → New Web Service → Connect GitHub
+   - Node runtime, Build: `npm install`, Start: `npm start`
 
-### 6. Local test [PENDING]
-- `npm start` → verify
+### [ ] 7. Live test
+   - Control: https://app.onrender.com/control
+   - Pantalla: https://app.onrender.com/pantalla
 
-### 7. Git & Render deploy [PENDING]
-- Git init/add/commit/push
-- Render.com deploy
+### [ ] 8. Completion
+   - Update this TODO with live URL
+   - `attempt_completion`
 
-**Next:** Test locally, then README + Git + Render deploy.
+**Notes**: Code already production-ready. Render free tier ok (uploads reset on cold starts).
 
