@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <title>CONESION - Control</title>
+  <meta name="viewport" content="width=device-width">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%); 
+      color: white; 
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+      height: 100vh; 
+      overflow-y: auto;
+    }
+    .header { 
+      background: rgba(0,255,136,0.1); 
+      padding: 15px; 
+      text-align: center; 
+      border-bottom: 1px solid rgba(0,255,136,0.3);
+    }
+    .upload-zone { 
+      margin: 20px; 
+      padding: 40px; 
+      border: 3px dashed rgba(0,255,136,0.5); 
+      border-radius: 16px; 
+      text-align: center; 
+      cursor: pointer; 
+      transition: all 0.3s;
+    }
+    .upload-zone:hover, .upload-zone.dragover { 
+      background: rgba(0,255,136,0.1); 
+      border-color: #00ff88;
+    }
+    .grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+      gap: 16px; 
+      padding: 20px; 
+    }
+    .thumb { 
+      position: relative; 
+      border-radius: 12px; 
+      overflow: hidden; 
+      cursor: pointer; 
+      border: 3px solid transparent;
+      transition: all 0.3s;
+    }
+    .thumb:hover { border-color: #00ff88; transform: scale(1.05); }
+    .thumb.active { border-color: #00ff88; box-shadow: 0 0 20px #00ff88; }
+    .thumb img, .thumb video { 
+      width: 100%; height: 100px; 
+      object-fit: cover; 
+    }
+    .video-icon { 
+      position: absolute; 
+      top: 8px; right: 32px; 
+      background: rgba(255,0,0,0.8); 
+      color: white; 
+      padding: 4px 8px; 
+      border-radius: 12px; 
+      font-size: 12px;
+    }
+    .num-label {
+      position: absolute; 
+      bottom: 4px; left: 4px; 
+      background: rgba(0,0,0,0.8); 
+      color: white; 
+      padding: 2px 6px; 
+      border-radius: 8px; 
+      font-size: 11px; 
+      font-weight: bold;
+    }
+    .del-btn { 
+      position: absolute; 
+      top: 4px; right: 4px; 
+      background: #ff4444; 
+      color: white; 
+      border: none; 
+      border-radius: 50%; 
+      width: 24px; height: 24px; 
+      font-size: 14px; 
+      cursor: pointer; 
+      z-index: 10;
+    }
+    .del-btn:hover { background: #ff6666; transform: scale(1.1); }
+    .nav { 
+      position: fixed; bottom: 20px; left: 50%; 
+      transform: translateX(-50%); 
+      display: flex; gap: 12px; 
+    }
+    .btn { 
+      width: 60px; height: 60px; 
+      border-radius: 50%; 
+      border: none; 
+      font-size: 24px; 
+      cursor: pointer; 
+      box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    }
+    .prev { background: #ff4444; }
+    .play { background: #44ff44; color: #000; }
+    .next { background: #4444ff; }
+    .status { 
+      position: fixed; top: 10px; right: 10px; 
+      background: rgba(0,0,0,0.7); 
+      padding: 8px 12px; 
+      border-radius: 20px; 
+      font-size: 14px;
+    }
+    @media (max-width: 480px) {
+      .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; padding: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="status" id="status">Conectando...</div>
+  
+  <div class="header">
+    <h1>🎬 CONESION Control</h1>
+    <p>Archivos: <span id="filecount">0</span></p>
+  </div>
+  
+  <div class="upload-zone" onclick="fileInput.click()">
+    📤 Arrastra archivos o click para subir<br>
+    JPG, PNG, WEBP, MP4, WEBM, MOV (500MB max)
+    <input id="fileInput" type="file" multiple accept="image/*,video/*" style="display:none">
+  </div>
+  
+  <div class="grid" id="grid"></div>
+  
+  <div class="nav">
+    <button class="btn prev" onclick="nav('prev')" title="Anterior">⬅</button>
+    <button class="btn play" onclick="goToCurrent()" title="Ir al actual">🏠</button>
+    <button class="btn next" onclick="nav('next')" title="Siguiente">➡</button>
+    <button class="btn" onclick="toggleVideo()" id="videoBtn" style="background:#ffaa00;display:none" title="Video ▶️">▶️</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let media = [];
+    let currentIndex = 0;
+    
+    const fileInput = document.getElementById('fileInput');
+    const grid = document.getElementById('grid');
+    const status = document.getElementById('status');
+    const videoBtn = document.getElementById('videoBtn');
+    
+    // DELETE FUNCTION
+    async function deleteFile(id, e) {
+      e.stopPropagation();
+      if (!confirm('¿Eliminar este archivo permanentemente?')) return;
+      
+      try {
+        const res = await fetch(`/api/media/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          status.textContent = '🗑️ Archivo eliminado';
+          setTimeout(() => status.textContent = 'Listo', 2000);
+        }
+      } catch (err) {
+        status.textContent = '❌ Error al eliminar';
+        console.error(err);
+      }
+    }
+    
+    // Drag & Drop
+    const uploadZone = document.querySelector('.upload-zone');
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+      uploadZone.addEventListener(event, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (event === 'dragenter' || event === 'dragover') uploadZone.classList.add('dragover');
+        else if (event === 'dragleave') uploadZone.classList.remove('dragover');
+        else if (event === 'drop') {
+          uploadZone.classList.remove('dragover');
+          handleFiles(e.dataTransfer.files);
+        }
+      });
+    });
+    
+    fileInput.addEventListener('change', e => handleFiles(e.target.files));
+    
+    async function handleFiles(files) {
+      const formData = new FormData();
+      for (let file of files) formData.append('files', file);
+      
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.success) {
+          status.textContent = `✅ ${files.length} archivos subidos`;
+          setTimeout(() => status.textContent = 'Listo', 3000);
+        }
+      } catch (err) {
+        status.textContent = `❌ Error: ${err.message}`;
+      }
+    }
+    
+    function renderGrid() {
+      grid.innerHTML = media.map((file, idx) => `
+        <div class="thumb ${idx === currentIndex ? 'active' : ''}" onclick="setCurrent(${idx})" title="#${idx+1} ${file.filename}">
+          ${file.type === 'video' ? '<div class="video-icon">🎬</div>' : ''}
+          <img src="/media/${file.filename}?t=${Date.now()}" 
+               onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjMzMzIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBUaHVtYjwvdGV4dD48L3N2Zz4=='" style="width:100%;height:100px;object-fit:cover;">
+          <div class="num-label">${idx+1}</div>
+          <button class="del-btn" onclick="deleteFile('${file.id}', event)" title="Eliminar">×</button>
+        </div>
+      `).join('');
+      document.getElementById('filecount').textContent = media.length;
+      videoBtn.style.display = media[currentIndex]?.type === 'video' ? 'block' : 'none';
+    }
+    
+    function setCurrent(idx) {
+      currentIndex = idx;
+      socket.emit('media:set', idx);
+      renderGrid();
+    }
+    
+    function nav(dir) {
+      socket.emit(`nav:${dir}`);
+    }
+    
+    function goToCurrent() {
+      socket.emit('media:set', currentIndex);
+    }
+    
+    function toggleVideo() {
+      const file = media[currentIndex];
+      if (file?.type === 'video') {
+        const playing = videoBtn.innerHTML === '⏸';
+        socket.emit(playing ? 'video:pause' : 'video:play');
+        videoBtn.innerHTML = playing ? '▶️' : '⏸';
+      }
+    }
+    
+    // Socket events
+    socket.on('media:state', state => {
+      media = state.files || [];
+      currentIndex = state.currentIndex || 0;
+      renderGrid();
+      status.textContent = '✅ Conectado (' + media.length + ' archivos)';
+    });
+    socket.on('media:list', list => {
+      media = list;
+      renderGrid();
+    });
+    socket.on('media:set', idx => {
+      currentIndex = idx;
+      renderGrid();
+    });
+  </script>
+</body>
+</html>
