@@ -15,112 +15,90 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST', 'DELETE', 'PUT'] }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST", "DELETE", "PUT"],
+    credentials: true
+  },
+  pingTimeout: 20000,
+  pingInterval: 25000
 });
 
-// === MULTER CONFIG - 500MB limit, allowed types ===
+app.set('trust proxy', 1);
+
+// === MULTER ===
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = [
-      'image/jpeg', 'image/png', 'image/webp',
-      'video/mp4', 'video/webm', 'video/quicktime'
-    ];
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'];
     if (allowed.includes(file.mimetype)) cb(null, true);
     else cb(new Error(`Tipo no permitido: ${file.mimetype}`), false);
   }
 });
 
 // === MIDDLEWARE ===
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      connectSrc: ["'self'", 'ws:'],
-      imgSrc: ["'self'", 'data:', 'blob:'],
-      mediaSrc: ["'self'"]
-    }
+app.use(helmet());
+app.use(compression());
+app.use(express.static(path.join(__dirname), { 
+  etag: false,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) res.set('Cache-Control', 'no-cache');
   }
 }));
-app.use(compression());
-app.use(express.static('.'));
-app.use(express.json());
+app.use(express.json({ limit: '500mb' }));
 app.use('/uploads', express.static('uploads'));
 
-// === DB INIT ===
+// === DB ===
 let db;
 async function initDb() {
   const adapter = new JSONFile('db.json');
   db = new Low(adapter, { files: [], currentIndex: 0 });
   await db.read();
-  if (!db.data || !db.data.files) {
-    db.data = { files: [], currentIndex: 0 };
-  } else if (db.data.images) {
-    // Migrate old schema
-    db.data.files = db.data.images.map(img => ({
-      id: img.id,
-      filename: path.basename(img.url),
-      type: img.type,
-      path: img.url
-    }));
-    db.data.currentIndex = 0;
-    delete db.data.images;
-  }
+  db.data ||= { files: [], currentIndex: 0 };
   await db.write();
   console.log(`🗄️ DB ready: ${db.data.files.length} files`);
 }
 
 // === ROUTES ===
 app.get('/', (req, res) => res.redirect('/pantalla.html'));
-app.get('/control', (req, res) => res.sendFile(path.join(__dirname, 'control.html')));
-app.get('/pantalla.html', (req, res) => res.sendFile(path.join(__dirname, 'pantalla.html')));
-app.get('/pantalla', (req, res) => res.redirect('/pantalla.html'));
-app.get('/test-upload', (req, res) => res.sendFile(path.join(__dirname, 'test-upload.html')));
+['control', 'pantalla.html', 'pantalla', 'test-upload.html'].forEach(route => {
+  app.get(`/${route}`, (req, res) => res.sendFile(path.join(__dirname, route === 'control' ? 'control.html' : route)));
+});
 
-// API: Get all files + current index
 app.get('/api/media', async (req, res) => {
   await db.read();
   res.json(db.data);
 });
 
-// API: Set current index
 app.put('/api/media/current', async (req, res) => {
   const { index } = req.body;
   await db.read();
-  db.data.currentIndex = Math.max(0, Math.min(index, db.data.files.length - 1));
+  db.data.currentIndex = Math.max(0, Math.min(index, (db.data.files?.length || 0) - 1));
   await db.write();
   io.emit('media:current', db.data.currentIndex);
   res.json({ success: true });
 });
 
-// UPLOAD
 app.post('/api/upload', upload.array('files', 10), async (req, res) => {
   try {
     await db.read();
-    console.log(`📤 Upload: ${req.files.length} files`);
     const results = [];
-    
     await fs.mkdir('uploads', { recursive: true });
     
     for (const file of req.files) {
       const id = uuidv4();
       const ext = path.extname(file.originalname).toLowerCase();
       const filename = `${id}${ext}`;
-      const filepath = path.join('uploads', filename);
+      await fs.writeFile(path.join('uploads', filename), file.buffer);
       const type = file.mimetype.startsWith('video/') ? 'video' : 'image';
-      
-      await fs.writeFile(filepath, file.buffer);
       db.data.files.push({ id, filename, type, path: `/uploads/${filename}` });
       results.push({ id, filename, type });
     }
     
     await db.write();
-    io.to('screen').emit('media:list', db.data.files);
-    io.to('control').emit('media:list', db.data.files);
-    console.log(`✅ ${results.length} files uploaded`);
+    io.emit('media:list', db.data.files);
+    io.emit('media:state', db.data);
     res.json({ success: true, files: results });
   } catch (err) {
     console.error('Upload error:', err);
@@ -128,7 +106,6 @@ app.post('/api/upload', upload.array('files', 10), async (req, res) => {
   }
 });
 
-// DELETE file
 app.delete('/api/media/:id', async (req, res) => {
   try {
     const id = req.params.id;
@@ -148,22 +125,16 @@ app.delete('/api/media/:id', async (req, res) => {
   }
 });
 
-// 🎥 VIDEO STREAMING - CRITICAL RANGE SUPPORT
 app.get('/media/:filename', async (req, res) => {
   try {
-    const filename = req.params.filename;
-    const filepath = path.join(__dirname, 'uploads', filename);
-    
+    const filepath = path.join(__dirname, 'uploads', req.params.filename);
     const stat = await fs.stat(filepath);
     const range = req.headers.range;
     
     if (!range) {
-      // Full file
       const stream = require('fs').createReadStream(filepath);
       res.set({
-        'Cache-Control': 'public, max-age=3600',
-
-        'Content-Type': filename.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg',
+        'Content-Type': req.params.filename.includes('.mp4') ? 'video/mp4' : 'image/jpeg',
         'Content-Length': stat.size,
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'public, max-age=3600'
@@ -172,7 +143,6 @@ app.get('/media/:filename', async (req, res) => {
       return;
     }
     
-    // Partial range request (video seeking)
     const parts = range.replace(/bytes=/, '').split('-');
     const start = parseInt(parts[0], 10);
     const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
@@ -183,60 +153,54 @@ app.get('/media/:filename', async (req, res) => {
       'Content-Range': `bytes ${start}-${end}/${stat.size}`,
       'Accept-Ranges': 'bytes',
       'Content-Length': chunksize,
-      'Content-Type': filename.includes('.mp4') ? 'video/mp4' : 'image/jpeg',
+      'Content-Type': 'video/mp4',
       'Cache-Control': 'no-cache'
     });
     stream.pipe(res);
   } catch (err) {
-    console.error('Media stream error:', err);
-    res.status(404).send('Media not found');
+    res.status(404).send('Not found');
   }
 });
 
-// === SOCKET.IO - ROOMS: 'control' & 'screen' ===
+// === SOCKET.IO ===
 io.on('connection', (socket) => {
-  console.log('👤 Client connected:', socket.id);
+  console.log('👤 Connected:', socket.id);
   
   socket.emit('status', 'connected');
   
-  // Auto-assign room based on path
   const url = socket.handshake.headers.referer || '';
-  console.log('URL:', url);
+  console.log('Referer:', url);
+  
   if (url.includes('/control')) {
     socket.join('control');
     socket.emit('role', 'control');
-    console.log('📱 Control joined:', socket.id);
+    console.log('📱 Control:', socket.id);
   } else {
     socket.join('screen');
     socket.emit('role', 'screen');
-    console.log('📺 Screen joined:', socket.id);
+    console.log('📺 Screen:', socket.id);
   }
   
-  // Load initial state
   socket.emit('media:state', db.data);
   
-  // CONTROL events
   socket.on('nav:next', async () => {
     await db.read();
-    if (db.data.files && db.data.files.length > 0) {
-      db.data.currentIndex = (db.data.currentIndex + 1) % db.data.files.length;
-      await db.write();
-      io.emit('media:set', db.data.currentIndex);
-    }
+    db.data.currentIndex = (db.data.currentIndex + 1) % (db.data.files.length || 1);
+    await db.write();
+    io.emit('media:set', db.data.currentIndex);
   });
   
   socket.on('nav:prev', async () => {
     await db.read();
-    if (db.data.files && db.data.files.length > 0) {
-      db.data.currentIndex = (db.data.currentIndex - 1 + db.data.files.length) % db.data.files.length;
-      await db.write();
-      io.emit('media:set', db.data.currentIndex);
-    }
+    db.data.currentIndex = (db.data.currentIndex - 1 + db.data.files.length) % (db.data.files.length || 1);
+    await db.write();
+    io.emit('media:set', db.data.currentIndex);
   });
   
-  socket.on('media:set', (index) => {
+  socket.on('media:set', async (index) => {
+    await db.read();
     db.data.currentIndex = index;
-    db.write();
+    await db.write();
     io.emit('media:set', index);
   });
   
@@ -248,8 +212,9 @@ io.on('connection', (socket) => {
 
 initDb().then(() => {
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 CONESION ready on http://localhost:${PORT}`);
-    console.log('📱 Control: /control');
-    console.log('📺 Screen: /pantalla');
+    console.log(`🚀 Server on port ${PORT}`);
+    console.log('Control: /control');
+    console.log('Screen: /pantalla.html');
   });
-});
+}).catch(console.error);
+
