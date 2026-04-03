@@ -197,16 +197,19 @@ app.get('/media/:filename', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('👤 Client connected:', socket.id);
   
+  socket.emit('status', 'connected');
+  
   // Auto-assign room based on path
   const url = socket.handshake.headers.referer || '';
+  console.log('URL:', url);
   if (url.includes('/control')) {
     socket.join('control');
     socket.emit('role', 'control');
-    console.log('📱 Control joined');
+    console.log('📱 Control joined:', socket.id);
   } else {
     socket.join('screen');
     socket.emit('role', 'screen');
-    console.log('📺 Screen joined');
+    console.log('📺 Screen joined:', socket.id);
   }
   
   // Load initial state
