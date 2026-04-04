@@ -136,8 +136,17 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io();
+    const socket = io({
+      path: "/socket.io",
+      transports: ["websocket"],
+      secure: true,
+      upgrade: false,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000
+    });
     let media = [];
+
     let currentIndex = 0;
     
     const fileInput = document.getElementById('fileInput');
@@ -232,6 +241,10 @@
       }
     }
     
+    socket.on('connect', () => {
+      socket.emit("register", "control");
+    });
+    
     // Socket events
     socket.on('media:state', state => {
       media = state.files || [];
@@ -239,6 +252,7 @@
       renderGrid();
       status.textContent = '✅ Conectado (' + media.length + ' archivos)';
     });
+
     socket.on('media:list', list => {
       media = list;
       renderGrid();

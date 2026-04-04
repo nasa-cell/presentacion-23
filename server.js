@@ -15,13 +15,8 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST", "DELETE", "PUT"],
-    credentials: true
-  },
-  pingTimeout: 20000,
-  pingInterval: 25000
+  cors: { origin: "*" },
+  transports: ["websocket"]
 });
 
 app.set('trust proxy', 1);
@@ -166,20 +161,11 @@ app.get('/media/:filename', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('👤 Connected:', socket.id);
   
-  socket.emit('status', 'connected');
-  
-  const url = socket.handshake.headers.referer || '';
-  console.log('Referer:', url);
-  
-  if (url.includes('/control')) {
-    socket.join('control');
-    socket.emit('role', 'control');
-    console.log('📱 Control:', socket.id);
-  } else {
-    socket.join('screen');
-    socket.emit('role', 'screen');
-    console.log('📺 Screen:', socket.id);
-  }
+  socket.on("register", (role) => {
+    socket.join(role);
+    socket.emit("role", role);
+    console.log("Client registered as:", role);
+  });
   
   socket.emit('media:state', db.data);
   
