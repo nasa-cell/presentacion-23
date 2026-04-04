@@ -183,28 +183,10 @@
       reconnectionDelay: 500
     });
 
-    socket.on('reconnect_attempt', () => {
-      console.log('Socket reconectando...');
-    });
-
-    socket.on('reconnect_error', (err) => {
-      console.error('Reconnect error control:', err);
-    });
-
-    socket.on('reconnect_failed', () => {
-      console.error('Reconnect fallido control');
-    });
-
-    let media = [];
-    let currentIndex = 0;
-
-    const fileInput = document.getElementById('fileInput');
-    const grid = document.getElementById('grid');
-    const status = document.getElementById('status');
-    const uploadZone = document.getElementById('uploadZone');
-    const progress = document.getElementById('progress');
+    console.log('Intentando conectar socket desde control...');
 
     socket.on('connect', () => {
+      console.log('Socket conectado en control:', socket.id);
       status.textContent = '🟢 Conectado';
       status.className = 'status connected';
       socket.emit('register', 'control');
@@ -212,6 +194,7 @@
     });
 
     socket.on('disconnect', () => {
+      console.log('Socket desconectado en control');
       status.textContent = '🔴 Desconectado';
       status.className = 'status disconnected';
     });
