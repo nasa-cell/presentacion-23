@@ -88,8 +88,6 @@
   <script>
     const socket = io();
 
-    console.log('Intentando conectar socket desde pantalla...');
-
     let media = [];
     let currentIndex = 0;
     let currentMedia = null;
@@ -236,7 +234,6 @@
     }
 
     socket.on('connect', () => {
-      console.log('Socket conectado en pantalla:', socket.id);
       status.textContent = '🟢 Conectado';
       status.classList.remove('error');
       status.classList.add('show');
@@ -256,23 +253,26 @@
       status.classList.add('error');
     });
 
-    socket.on('media:state', state => {
-      media = state.files || [];
-      currentIndex = state.currentIndex || 0;
-
-      if (media.length > 0) {
-        showMedia(currentIndex);
-        status.textContent = `✅ ${media.length} archivos`;
-      } else {
-        viewer.innerHTML = '';
-        counter.textContent = '0 / 0';
-        loading.style.display = 'none';
-        status.textContent = 'Sin archivos';
-      }
+    socket.on("cine", () => {
+      enterFullscreen();
     });
 
-    socket.on('media:set', index => {
-      if (media.length > 0) showMedia(index);
+    socket.on("cambiar", (accion) => {
+      if (accion === "mostrar") {
+        if (media.length > 0) showMedia(currentIndex);
+      }
+      if (accion === "siguiente") {
+        if (media.length > 0) {
+          currentIndex = (currentIndex + 1) % media.length;
+          showMedia(currentIndex);
+        }
+      }
+      if (accion === "anterior") {
+        if (media.length > 0) {
+          currentIndex = (currentIndex - 1 + media.length) % media.length;
+          showMedia(currentIndex);
+        }
+      }
     });
 
     socket.on('video:play', () => {

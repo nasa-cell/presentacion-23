@@ -169,16 +169,14 @@
     <button class="btn prev" onclick="nav('prev')" title="Anterior">⬅</button>
     <button class="btn play" onclick="goToCurrent()" title="Actual">🏠</button>
     <button class="btn next" onclick="nav('next')" title="Siguiente">➡</button>
+    <button class="btn fullscreen" onclick="fullscreen()" title="Pantalla Completa">📺</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
 
-    console.log('Intentando conectar socket desde control...');
-
     socket.on('connect', () => {
-      console.log('Socket conectado en control:', socket.id);
       status.textContent = '🟢 Conectado';
       status.className = 'status connected';
       socket.emit('register', 'control');
@@ -226,11 +224,26 @@
     }
 
     function nav(dir) {
-      socket.emit(`nav:${dir}`);
+      if (dir === 'next') socket.emit("cambiar", "siguiente");
+      if (dir === 'prev') socket.emit("cambiar", "anterior");
     }
 
     function goToCurrent() {
-      socket.emit('media:set', currentIndex);
+      socket.emit("cambiar", "mostrar");
+    }
+
+    function fullscreen() {
+      socket.emit("cine");
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      } else if (el.mozRequestFullScreen) {
+        el.mozRequestFullScreen();
+      } else if (el.msRequestFullscreen) {
+        el.msRequestFullscreen();
+      }
     }
 
     async function deleteFile(id, e) {
