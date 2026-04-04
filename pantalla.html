@@ -86,27 +86,9 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io(window.location.origin, {
-      path: "/socket.io",
-      transports: ["polling"],
-      upgrade: false,
-      timeout: 20000,
-      reconnection: true,
-      reconnectionAttempts: 20,
-      reconnectionDelay: 500
-    });
+    const socket = io();
 
-    socket.on('reconnect_attempt', () => {
-      console.log('Socket reconectando...');
-    });
-
-    socket.on('reconnect_error', (err) => {
-      console.error('Reconnect error pantalla:', err);
-    });
-
-    socket.on('reconnect_failed', () => {
-      console.error('Reconnect fallido pantalla');
-    });
+    console.log('Intentando conectar socket desde pantalla...');
 
     let media = [];
     let currentIndex = 0;
