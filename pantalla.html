@@ -1,298 +1,130 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>CONESION - Pantalla</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #000;
-      height: 100vh;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-      color: white;
-      user-select: none;
-    }
-    #viewer {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: #000;
-      opacity: 0;
-      transition: opacity 0.5s ease-in-out;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #viewer.show { opacity: 1; }
-    #viewer img,
-    #viewer video {
-      max-width: 95vw;
-      max-height: 95vh;
-      object-fit: contain;
-      border-radius: 12px;
-      transition: transform 0.3s ease;
-      background: #000;
-    }
-    #counter {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,255,136,0.95);
-      color: #000;
-      padding: 15px 30px;
-      border-radius: 30px;
-      font-size: 28px;
-      font-weight: bold;
-      box-shadow: 0 10px 40px rgba(0,255,136,0.5);
-      z-index: 100;
-    }
-    #status {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: rgba(0,255,136,0.9);
-      color: #000;
-      padding: 10px 20px;
-      border-radius: 25px;
-      font-size: 16px;
-      font-weight: bold;
-      opacity: 0;
-      transition: opacity 0.3s;
-      z-index: 100;
-    }
-    #status.show, #status.error { opacity: 1; }
-    #status.error { background: rgba(255,68,68,0.9); }
-    #loading {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 48px;
-      opacity: 0.8;
-      z-index: 100;
-    }
-  </style>
+  <title>Pantalla</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="viewer"></div>
-  <div id="counter">0 / 0</div>
-  <div id="status">Conectando...</div>
-  <div id="loading">⏳ Cargando</div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
+<div class="phone-frame">
+  <div class="content">
+    <!-- Title removed per feedback -->
+<img id="img" src="">
+<!-- Gracias removed per feedback -->
+    <p id="fullscreenHint" style="margin-top:1rem; color:#444;">Presiona el botón para ir a pantalla completa (necesario en algunos navegadores).</p>
+    <button id="enterFullscreen" style="margin-top:0.5rem;">📺 Ir a pantalla completa</button>
+  </div>
+</div>
 
-    let media = [];
-    let currentIndex = 0;
-    let currentMedia = null;
-    let zoomLevel = 1;
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
 
-    const viewer = document.getElementById('viewer');
-    const counter = document.getElementById('counter');
-    const status = document.getElementById('status');
-    const loading = document.getElementById('loading');
+let diapositivas = [];
+  let index = 0;
 
-    function enterFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
+  // Load images dynamically
+  fetch('/images')
+    .then(res => res.json())
+    .then(images => {
+      diapositivas = images;
+    })
+    .catch(err => console.error('Error loading images:', err));
+
+const fullscreenButton = document.getElementById('enterFullscreen');
+const fullscreenHint = document.getElementById('fullscreenHint');
+
+function requestFullscreen() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) {
+    el.requestFullscreen();
+  } else if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+  } else if (el.mozRequestFullScreen) {
+    el.mozRequestFullScreen();
+  } else if (el.msRequestFullscreen) {
+    el.msRequestFullscreen();
+  }
+}
+
+fullscreenButton.addEventListener('click', () => {
+  requestFullscreen();
+  fullscreenButton.style.display = 'none';
+  fullscreenHint.textContent = 'Pantalla completa activada';
+});
+
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+    fullscreenButton.style.display = 'none';
+    fullscreenHint.textContent = 'Modo pantalla completa (ESC para salir)';
+  } else {
+    fullscreenButton.style.display = 'inline-block';
+    fullscreenHint.textContent = 'Presiona el botón para ir a pantalla completa';
+  }
+});
+
+socket.on("cine", () => {
+  // Intentar fullscreen directamente (a veces falla por falta de gesto usuario desde otra ventana)
+  requestFullscreen();
+
+  // Mostrar botón de fallback para que el usuario confirme en esta pestaña
+  fullscreenButton.style.display = 'inline-block';
+  fullscreenHint.textContent = 'Se solicitó pantalla completa desde control. Toca el botón si no se activó.';
+});
+
+socket.on("cambiar", (accion) => {
+
+    if (accion === "mostrar") {
+      // Mostrar la primera imagen o la actual
+      const img = document.getElementById("img");
+      img.classList.remove('show');
+      img.onload = () => img.classList.add('show');
+      img.src = diapositivas[index];
+    }
+
+    if (accion === "siguiente") {
+      index++;
+      if (index >= diapositivas.length) index = 0;
+    }
+
+    if (accion === "anterior") {
+      index--;
+      if (index < 0) {
+        index = diapositivas.length - 1;
       }
     }
 
-    document.addEventListener('click', enterFullscreen);
-
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') {
-        document.exitFullscreen().catch(() => {});
-      }
-      if (['ArrowLeft', 'ArrowRight', ' ', '+', '-', '='].includes(e.key)) {
-        e.preventDefault();
-        handleKey(e.key);
-      }
-    });
-
-    function handleKey(key) {
-      switch (key) {
-        case 'ArrowLeft':
-          socket.emit('nav:prev');
-          break;
-        case 'ArrowRight':
-          socket.emit('nav:next');
-          break;
-        case ' ':
-          toggleVideo();
-          break;
-        case '+':
-        case '=':
-          zoomMedia(1.2);
-          break;
-        case '-':
-          zoomMedia(0.8);
-          break;
-      }
+      // Fade anim para siguiente/anterior
+    if (accion === "siguiente" || accion === "anterior") {
+      const img = document.getElementById("img");
+      img.classList.remove('show');
+      img.onload = () => img.classList.add('show');
+      img.src = diapositivas[index];
     }
 
-    function showMedia(index) {
-      if (!media.length) {
-        viewer.innerHTML = '';
-        counter.textContent = '0 / 0';
-        loading.style.display = 'none';
-        viewer.classList.remove('show');
-        return;
-      }
+  });
 
-      loading.style.display = 'block';
-      viewer.classList.remove('show');
-      status.textContent = `Cargando ${index + 1}/${media.length}`;
-      status.classList.add('show');
-
-      currentIndex = index;
-      const file = media[index];
-      if (!file) return;
-
-      viewer.innerHTML = '';
-      counter.textContent = `${index + 1} / ${media.length}`;
-      zoomLevel = 1;
-      currentMedia = null;
-
-      if (file.type === 'video') {
-        const video = document.createElement('video');
-        video.src = `/media/${file.filename}`;
-        video.preload = 'auto';
-        video.autoplay = true;
-        video.muted = false;
-        video.playsInline = true;
-        video.controls = true;
-        video.loop = false;
-
-        video.onloadeddata = () => {
-          viewer.classList.add('show');
-          loading.style.display = 'none';
-          status.classList.remove('show');
-          currentMedia = video;
-          socket.emit('video:loaded');
-        };
-
-        video.onended = () => socket.emit('nav:next');
-
-        video.ontimeupdate = () => {
-          socket.emit('video:time', video.currentTime);
-        };
-
-        video.onerror = () => {
-          status.textContent = '❌ Error video';
-          status.classList.add('error');
-        };
-
-        viewer.appendChild(video);
-      } else {
-        const img = document.createElement('img');
-        img.src = `/media/${file.filename}`;
-        img.style.transform = `scale(${zoomLevel})`;
-        img.style.transition = 'transform 0.3s ease';
-
-        img.onload = () => {
-          viewer.classList.add('show');
-          loading.style.display = 'none';
-          status.classList.remove('show');
-          currentMedia = img;
-        };
-
-        img.onerror = () => {
-          status.textContent = '❌ Error imagen';
-          status.classList.add('error');
-        };
-
-        viewer.appendChild(img);
+// Salir de pantalla completa con ESC
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' || event.key === 'Esc') {
+    if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
       }
     }
+  }
+});
 
-    function zoomMedia(factor) {
-      zoomLevel *= factor;
-      zoomLevel = Math.max(0.5, Math.min(3, zoomLevel));
-      if (currentMedia) {
-        currentMedia.style.transform = `scale(${zoomLevel})`;
-      }
-    }
+// Imagen solo aparece al presionar "Mostrar" desde control (pantalla negra inicial)
 
-    function toggleVideo() {
-      const video = viewer.querySelector('video');
-      if (video) {
-        if (video.paused) {
-          video.play().catch(() => {});
-          socket.emit('video:play');
-        } else {
-          video.pause();
-          socket.emit('video:pause');
-        }
-      }
-    }
 
-    socket.on('connect', () => {
-      status.textContent = '🟢 Conectado';
-      status.classList.remove('error');
-      status.classList.add('show');
-      console.log('Pantalla conectada:', socket.id);
-      socket.emit('register', 'pantalla');
-    });
+</script>
 
-    socket.on('disconnect', () => {
-      console.log('Socket desconectado en pantalla');
-      status.textContent = '🔴 Reconectando...';
-      status.classList.add('error');
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('Error socket pantalla:', err.message);
-      status.textContent = '❌ Error conexión';
-      status.classList.add('error');
-    });
-
-    socket.on("cine", () => {
-      enterFullscreen();
-    });
-
-    socket.on("cambiar", (accion) => {
-      if (accion === "mostrar") {
-        if (media.length > 0) showMedia(currentIndex);
-      }
-      if (accion === "siguiente") {
-        if (media.length > 0) {
-          currentIndex = (currentIndex + 1) % media.length;
-          showMedia(currentIndex);
-        }
-      }
-      if (accion === "anterior") {
-        if (media.length > 0) {
-          currentIndex = (currentIndex - 1 + media.length) % media.length;
-          showMedia(currentIndex);
-        }
-      }
-    });
-
-    socket.on('video:play', () => {
-      const video = viewer.querySelector('video');
-      if (video) video.play().catch(() => {});
-    });
-
-    socket.on('video:pause', () => {
-      const video = viewer.querySelector('video');
-      if (video) video.pause();
-    });
-
-    socket.on('video:time', (time) => {
-      const video = viewer.querySelector('video');
-      if (video && Math.abs(video.currentTime - time) > 1.5) {
-        video.currentTime = time;
-      }
-    });
-
-    document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-  </script>
 </body>
 </html>

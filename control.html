@@ -1,314 +1,45 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>CONESION - Control</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
-      color: white;
-      font-family: Arial, sans-serif;
-      min-height: 100vh;
-      overflow-y: auto;
-    }
-    .header {
-      background: rgba(0,255,136,0.1);
-      padding: 15px;
-      text-align: center;
-      border-bottom: 1px solid rgba(0,255,136,0.3);
-    }
-    .upload-zone {
-      margin: 20px;
-      padding: 40px;
-      border: 3px dashed rgba(0,255,136,0.5);
-      border-radius: 16px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.3s;
-      font-size: 18px;
-    }
-    .upload-zone:hover, .upload-zone.dragover {
-      background: rgba(0,255,136,0.1);
-      border-color: #00ff88;
-    }
-    .upload-zone.loading { opacity: 0.7; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 16px;
-      padding: 20px;
-      padding-bottom: 110px;
-    }
-    .thumb {
-      position: relative;
-      border-radius: 12px;
-      overflow: hidden;
-      cursor: pointer;
-      border: 3px solid transparent;
-      transition: all 0.3s;
-      background: rgba(255,255,255,0.05);
-    }
-    .thumb:hover {
-      border-color: #00ff88;
-      transform: scale(1.03);
-    }
-    .thumb.active {
-      border-color: #00ff88;
-      box-shadow: 0 0 20px #00ff88;
-    }
-    .thumb img {
-      width: 100%;
-      height: 100px;
-      object-fit: cover;
-      display: block;
-      background: #111;
-    }
-    .video-icon {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      background: rgba(255,0,0,0.85);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      z-index: 2;
-    }
-    .num-label {
-      position: absolute;
-      bottom: 4px;
-      left: 4px;
-      background: rgba(0,0,0,0.85);
-      color: white;
-      padding: 2px 6px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: bold;
-      z-index: 2;
-    }
-    .del-btn {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      background: #ff4444;
-      color: white;
-      border: none;
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      font-size: 14px;
-      cursor: pointer;
-      z-index: 3;
-    }
-    .nav {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 12px;
-      z-index: 50;
-    }
-    .btn {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-    }
-    .prev { background: #ff4444; }
-    .play { background: #44ff44; color: #000; }
-    .next { background: #4444ff; color: #fff; }
-    .status {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: rgba(0,0,0,0.7);
-      padding: 8px 12px;
-      border-radius: 20px;
-      font-size: 14px;
-      transition: all 0.3s;
-      z-index: 100;
-    }
-    .status.connected { background: rgba(0,255,0,0.3); }
-    .status.disconnected { background: rgba(255,0,0,0.3); }
-    #progress {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 4px;
-      background: #00ff88;
-      width: 0%;
-      transition: width 0.3s;
-      z-index: 1000;
-    }
-  </style>
+  <title>Control</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="progress"></div>
-  <div class="status" id="status">Conectando...</div>
-
-  <div class="header">
-    <h1>🎬 CONESION Control</h1>
-    <p>Archivos: <span id="filecount">0</span></p>
+<div class="phone-frame">
+  <div class="content glass-card">
+    <!-- Title removed per feedback -->
+    <div class="control-buttons">
+      <button onclick="enviar('anterior')">⬅️ Atrás</button>
+      <button onclick="enviar('mostrar')">▶️ Mostrar</button>
+      <button onclick="enviar('siguiente')">➡️ Siguiente</button>
+      <button onclick="fullscreen()">📺 Pantalla Completa</button>
+    </div>
   </div>
+</div>
 
-  <div class="upload-zone" id="uploadZone">
-    📤 Arrastra o haz click<br>
-    JPG, PNG, WEBP, MP4 (100MB max)
-    <input id="fileInput" type="file" multiple accept="image/*,video/*" style="display:none">
-  </div>
 
-  <div class="grid" id="grid"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
 
-  <div class="nav">
-    <button class="btn prev" onclick="nav('prev')" title="Anterior">⬅</button>
-    <button class="btn play" onclick="goToCurrent()" title="Actual">🏠</button>
-    <button class="btn next" onclick="nav('next')" title="Siguiente">➡</button>
-    <button class="btn fullscreen" onclick="fullscreen()" title="Pantalla Completa">📺</button>
-  </div>
+function enviar(accion) {
+    socket.emit("cambiar", accion);
+  }
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
+function fullscreen() {
+  socket.emit("cine");
+  const el = document.documentElement;
+  if (el.requestFullscreen) {
+    el.requestFullscreen();
+  } else if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+  } else if (el.mozRequestFullScreen) {
+    el.mozRequestFullScreen();
+  } else if (el.msRequestFullscreen) {
+    el.msRequestFullscreen();
+  }
+}
+</script>
 
-    socket.on('connect', () => {
-      status.textContent = '🟢 Conectado';
-      status.className = 'status connected';
-      socket.emit('register', 'control');
-      console.log('Control conectado:', socket.id);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Socket desconectado en control');
-      status.textContent = '🔴 Desconectado';
-      status.className = 'status disconnected';
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('Error socket control:', err.message);
-      status.textContent = '❌ Error conexión';
-      status.className = 'status disconnected';
-    });
-
-    socket.on('media:state', state => {
-      media = state.files || [];
-      currentIndex = state.currentIndex || 0;
-      renderGrid();
-      document.getElementById('filecount').textContent = media.length;
-    });
-
-    socket.on('media:set', idx => {
-      currentIndex = idx || 0;
-      renderGrid();
-    });
-
-    function renderGrid() {
-      grid.innerHTML = media.map((file, idx) => `
-        <div class="thumb ${idx === currentIndex ? 'active' : ''}" onclick="setCurrent(${idx})">
-          ${file.type === 'video' ? '<div class="video-icon">🎬</div>' : ''}
-          <img src="/media/${file.filename}" onerror="this.style.display='none'">
-          <div class="num-label">${idx + 1}</div>
-          <button class="del-btn" onclick="deleteFile('${file.id}', event)">×</button>
-        </div>
-      `).join('');
-    }
-
-    function setCurrent(idx) {
-      currentIndex = idx;
-      socket.emit('media:set', idx);
-    }
-
-    function nav(dir) {
-      if (dir === 'next') socket.emit("cambiar", "siguiente");
-      if (dir === 'prev') socket.emit("cambiar", "anterior");
-    }
-
-    function goToCurrent() {
-      socket.emit("cambiar", "mostrar");
-    }
-
-    function fullscreen() {
-      socket.emit("cine");
-      const el = document.documentElement;
-      if (el.requestFullscreen) {
-        el.requestFullscreen();
-      } else if (el.webkitRequestFullscreen) {
-        el.webkitRequestFullscreen();
-      } else if (el.mozRequestFullScreen) {
-        el.mozRequestFullScreen();
-      } else if (el.msRequestFullscreen) {
-        el.msRequestFullscreen();
-      }
-    }
-
-    async function deleteFile(id, e) {
-      e.stopPropagation();
-      if (!confirm('¿Eliminar este archivo?')) return;
-
-      try {
-        const res = await fetch(`/api/media/${id}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Error al eliminar');
-        status.textContent = '🗑️ Eliminado';
-        status.className = 'status connected';
-      } catch (err) {
-        console.error(err);
-        status.textContent = '❌ Error';
-        status.className = 'status disconnected';
-      }
-    }
-
-    ['dragenter','dragover','dragleave','drop'].forEach(event => {
-      uploadZone.addEventListener(event, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (event === 'dragenter' || event === 'dragover') uploadZone.classList.add('dragover');
-        else uploadZone.classList.remove('dragover');
-        if (event === 'drop') handleFiles(e.dataTransfer.files);
-      });
-    });
-
-    uploadZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', e => handleFiles(e.target.files));
-
-    async function handleFiles(files) {
-      if (!files || files.length === 0) return;
-
-      const formData = new FormData();
-      for (let file of Array.from(files)) formData.append('files', file);
-
-      uploadZone.classList.add('loading');
-      progress.style.width = '20%';
-
-      try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        progress.style.width = '70%';
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Error al subir');
-
-        status.textContent = `✅ ${files.length} subidos`;
-        status.className = 'status connected';
-        progress.style.width = '100%';
-      } catch (err) {
-        console.error(err);
-        status.textContent = '❌ Error upload';
-        status.className = 'status disconnected';
-        progress.style.width = '0%';
-      } finally {
-        uploadZone.classList.remove('loading', 'dragover');
-        setTimeout(() => { progress.style.width = '0%'; }, 500);
-      }
-    }
-  </script>
 </body>
 </html>
