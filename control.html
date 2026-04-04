@@ -173,12 +173,26 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    const socket = io(window.location.origin, {
+    const socket = io({
       path: "/socket.io",
       transports: ["polling"],
+      upgrade: false,
+      timeout: 20000,
       reconnection: true,
       reconnectionAttempts: 20,
       reconnectionDelay: 500
+    });
+
+    socket.on('reconnect_attempt', () => {
+      console.log('Socket reconectando...');
+    });
+
+    socket.on('reconnect_error', (err) => {
+      console.error('Reconnect error control:', err);
+    });
+
+    socket.on('reconnect_failed', () => {
+      console.error('Reconnect fallido control');
     });
 
     let media = [];
